@@ -1,11 +1,434 @@
 <html>
 <head>
     <title>RPG</title>
-    <script src=https://code.jquery.com/jquery-3.6.0.min.js></script>
+
+    <script src=https://code.jquery.com/jquery-3.6.0.min.js>
+    </script>
+
+    <script type="text/javascript">
+        let raceToDropdownValueMap = new Map();
+        raceToDropdownValueMap.set("HUMAN", 0);
+        raceToDropdownValueMap.set("DWARF", 1);
+        raceToDropdownValueMap.set("ELF", 2);
+        raceToDropdownValueMap.set("GIANT", 3);
+        raceToDropdownValueMap.set("ORC", 4);
+        raceToDropdownValueMap.set("TROLL", 5);
+        raceToDropdownValueMap.set("HOBBIT", 6);
+
+        let professionToDropdownValueMap = new Map();
+        professionToDropdownValueMap.set("WARRIOR", 0);
+        professionToDropdownValueMap.set("ROGUE", 1);
+        professionToDropdownValueMap.set("SORCERER", 2);
+        professionToDropdownValueMap.set("CLERIC", 3);
+        professionToDropdownValueMap.set("PALADIN", 4);
+        professionToDropdownValueMap.set("NAZGUL", 5);
+        professionToDropdownValueMap.set("WARLOCK", 6);
+        professionToDropdownValueMap.set("DRUID", 7);
+
+        let bannedToDropdownValueMap = new Map();
+        bannedToDropdownValueMap.set("false", 0);
+        bannedToDropdownValueMap.set("true", 1);
+
+        var pageNumber = 0;
+
+        function removeAllChildNodes(parent) {
+            while (parent.firstChild) {
+                parent.removeChild(parent.firstChild);
+            }
+        }
+
+        function clearTable(table) {
+            var rows = table.rows;
+            var i = rows.length;
+            while (--i) {
+                rows[i].parentNode.removeChild(rows[i]);
+            }
+        }
+
+        window.onload = function () {
+            var createAccountRaceDropdown = document.getElementById("createAccountRaceDropdown");
+            fillDropdownWithOptions(createAccountRaceDropdown, raceToDropdownValueMap);
+
+            var createAccountProfessionDropdown = document.getElementById("createAccountProfessionDropdown");
+            fillDropdownWithOptions(createAccountProfessionDropdown, professionToDropdownValueMap);
+
+            var createAccountBannedDropdown = document.getElementById("createAccountBannedDropdown");
+            fillDropdownWithOptions(createAccountBannedDropdown, bannedToDropdownValueMap);
+
+            loadAccountsTableData();
+        }
+
+        function onPageButtonClick() {
+            pageNumber = this.value;
+            markPageButtonSelected();
+            loadAccounts();
+        }
+
+        function markPageButtonSelected() {
+            var buttonsContainer = document.getElementById("pageButtonsContainer");
+            var children = buttonsContainer.childNodes;
+            for (var i = 0; i < children.length; i++) {
+                var eachButton = children[i];
+                eachButton.style.color = eachButton.value == pageNumber ? "red" : "black";
+            }
+        }
+
+        function onAccountDeleteClick() {
+            var idAccount = this.value;
+            $.ajax({
+                type: "DELETE",
+                url: "/rest/players/" + idAccount,
+                success: function (msg) {
+                    loadAccounts();
+                }
+            });
+        }
+
+        function getRawDropdownSelectedValue(rawElement, dropdownName, textToValueMap) {
+            var cellElement = rawElement.querySelector('td[name='+dropdownName+']');
+            var selectElement = cellElement.firstChild;
+            var valueInMap = selectElement.value;
+            return [...textToValueMap].find(([key, val]) => val == valueInMap)[0];
+        }
+
+        function getDocumentDropdownSelectedValue(dropdownName, textToValueMap) {
+            var selectElement = document.getElementById(dropdownName);
+            var valueInMap = selectElement.value;
+            return [...textToValueMap].find(([key, val]) => val == valueInMap)[0];
+        }
+
+        function onAccountEditClick() {
+            var traw = this.parentNode.parentNode;
+            var accountId = this.value;
+
+            if (traw.editing) {
+                var cellName = traw.querySelector('td[name="cellName"]');
+                var nameInput = cellName.firstChild;
+                var accountName = nameInput.value;
+
+                var cellTitle = traw.querySelector('td[name="cellTitle"]');
+                var titleInput = cellTitle.firstChild;
+                var accountTitle = titleInput.value;
+
+                var accountRace = getRawDropdownSelectedValue(traw, "cellRace", raceToDropdownValueMap);
+
+                var accountProfession = getRawDropdownSelectedValue(traw, "cellProfession", professionToDropdownValueMap);
+
+                var accountBanned = getRawDropdownSelectedValue(traw, "cellBanned", bannedToDropdownValueMap);
+
+                //изменить на сервере
+                var requestBody = {
+                    name: accountName,
+                    title: accountTitle,
+                    race: accountRace,
+                    profession: accountProfession,
+                    banned: accountBanned
+                };
+
+                $.ajax ({
+                    url: "/rest/players/" + accountId,
+                    type: "POST",
+                    data: JSON.stringify(requestBody),
+                    dataType: "json",
+                    contentType: "application/json; charset=utf-8",
+                    success: function(){
+                        //alert( "success ");
+                        loadAccounts();
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        alert("Unable to update.");
+                    }
+                });
+            } else {
+                traw.editing = true;
+
+                this.src = "/img/save.png";
+
+                var cellDelete = traw.querySelector('td[name="cellDelete"]');
+                removeAllChildNodes(cellDelete);
+
+                var cellName = traw.querySelector('td[name="cellName"]');
+                var accountName = cellName.innerHTML;
+                cellName.innerHTML = "";
+                var nameInput = document.createElement("input");
+                nameInput.setAttribute('value', accountName);
+                cellName.appendChild(nameInput);
+
+                var cellTitle = traw.querySelector('td[name="cellTitle"]');
+                var accountTitle = cellTitle.innerHTML;
+                cellTitle.innerHTML = "";
+                var titleInput = document.createElement("input");
+                titleInput.setAttribute('value', accountTitle);
+                cellTitle.appendChild(titleInput);
+
+                var cellRace = traw.querySelector('td[name="cellRace"]');
+                var raceSelect = createDropdown(raceToDropdownValueMap, cellRace.innerHTML);
+                cellRace.innerHTML = "";
+                cellRace.appendChild(raceSelect);
+
+                var cellProfession = traw.querySelector('td[name="cellProfession"]');
+                var professionSelect = createDropdown(professionToDropdownValueMap, cellProfession.innerHTML);
+                cellProfession.innerHTML = "";
+                cellProfession.appendChild(professionSelect);
+
+                var cellBanned = traw.querySelector('td[name="cellBanned"]');
+                var bannedSelect = createDropdown(bannedToDropdownValueMap, cellBanned.innerHTML);
+                cellBanned.innerHTML = "";
+                cellBanned.appendChild(bannedSelect);
+            }
+        }
+
+        function createDropdown(textToValueMap, selectedElement) {
+            var select = document.createElement("select");
+            for (const [key, value] of textToValueMap) {
+                select.options.add(new Option(key, value));
+            }
+            select.value = textToValueMap.get(selectedElement);
+            return select;
+        }
+
+        function fillDropdownWithOptions(select, textToValueMap) {
+            for (const [key, value] of textToValueMap) {
+                select.options.add(new Option(key, value));
+            }
+        }
+
+        function onLoadPlayers(data) {
+            var table = document.getElementById("tableAccounts");
+
+            function addCell(row, cellValue) {
+                var cell = row.insertCell();
+                cell.innerHTML = cellValue;
+                return cell;
+            }
+
+            function addCellWithName(row, cellValue, cellName) {
+                var cell = addCell(row, cellValue);
+                cell.setAttribute('name', cellName);
+            }
+
+            clearTable(table);
+
+            for (var eachIndex in data) {
+                var eachAccount = data[eachIndex];
+
+                var row = table.insertRow();
+
+                addCell(row, eachAccount.id);
+
+                addCellWithName(row, eachAccount.name, "cellName");
+                addCellWithName(row, eachAccount.title, "cellTitle");
+
+                addCellWithName(row, eachAccount.race, "cellRace");
+                addCellWithName(row, eachAccount.profession, "cellProfession");
+                addCell(row, eachAccount.level);
+
+                var birthdayDate = new Date(eachAccount.birthday);
+
+                function join(t, a, s) {
+                    function format(m) {
+                        let f = new Intl.DateTimeFormat('en', m);
+                        return f.format(t);
+                    }
+
+                    return a.map(format).join(s);
+                }
+
+                let a = [{month: 'numeric'}, {day: 'numeric'}, {year: 'numeric'}];
+                let s = join(birthdayDate, a, '/');
+
+                addCell(row, s);
+
+                addCellWithName(row, eachAccount.banned, "cellBanned");
+
+                var cellEdit = row.insertCell();
+                var imageElement1 = document.createElement("img");
+                imageElement1.value = eachAccount.id;
+                imageElement1.src = "/img/edit.png";
+                cellEdit.appendChild(imageElement1);
+                imageElement1.onclick = onAccountEditClick;
+
+                var cellDelete = row.insertCell();
+                cellDelete.setAttribute('name', 'cellDelete');
+                var imageElement2 = document.createElement("img");
+                imageElement2.value = eachAccount.id;
+                imageElement2.src = "/img/delete.png";
+                cellDelete.appendChild(imageElement2);
+                imageElement2.onclick = onAccountDeleteClick;
+            }
+        }
+
+        function getSelectedAccountsPerPage() {
+            var dropdown = document.getElementById("accountsPerPageDropdown");
+            var accountsPerPage = dropdown.value;
+            return accountsPerPage;
+        }
+
+        function loadAccounts() {
+            var pageSize = getSelectedAccountsPerPage();
+
+            // load accounts
+            $.get("/rest/players?pageNumber=" + pageNumber + "&pageSize=" + pageSize, onLoadPlayers);
+        }
+
+        function loadAccountsTableData() {
+            pageNumber = 0;
+
+            loadAccounts();
+
+            // load count of accounts
+            $.get("/rest/players/count", onLoadPlayersCount);
+
+            function onLoadPlayersCount(accountsCount) {
+                var accountsPerPage = getSelectedAccountsPerPage();
+                var pagesCount = Math.ceil(accountsCount / accountsPerPage);
+
+                var buttonsContainer = document.getElementById("pageButtonsContainer");
+                removeAllChildNodes(buttonsContainer);
+                for (var i = 1; i <= pagesCount; i++) {
+                    var btn = document.createElement("button");
+                    btn.value = i - 1;
+                    btn.onclick = onPageButtonClick;
+                    btn.innerHTML = i;
+                    buttonsContainer.appendChild(btn);
+                }
+                markPageButtonSelected();
+            }
+        }
+
+        function onChangeAccountsPerPage() {
+            loadAccountsTableData();
+        }
+
+        function clearCreateAccountFields() {
+            document.getElementById("createAccountNameInput").value = "";
+            document.getElementById("createAccountTitleInput").value = "";
+            document.getElementById("createAccountLevelInput").value = "";
+            document.getElementById("createAccountRaceDropdown").value = 0;
+            document.getElementById("createAccountBirthdayInput").value = 0;
+            document.getElementById("createAccountProfessionDropdown").value = 0;
+            document.getElementById("createAccountBannedDropdown").value = 0;
+        }
+
+        function onSaveClick() {
+            var accountName = document.getElementById("createAccountNameInput").value;
+            var accountTitle = document.getElementById("createAccountTitleInput").value;
+            var accountRace = getDocumentDropdownSelectedValue("createAccountRaceDropdown", raceToDropdownValueMap);
+            var accountProfession = getDocumentDropdownSelectedValue("createAccountProfessionDropdown", professionToDropdownValueMap);
+
+            var birthdayInput = document.getElementById("createAccountBirthdayInput");
+            var birthdayDate = new Date(birthdayInput.value);
+            var accountBirthday = birthdayDate.getTime();
+
+            var accountBanned = getDocumentDropdownSelectedValue("createAccountBannedDropdown", bannedToDropdownValueMap)
+            var accountLevel = document.getElementById("createAccountLevelInput").value;
+
+            //изменить на сервере
+            var requestBody = {
+                name: accountName,
+                title: accountTitle,
+                race: accountRace,
+                profession: accountProfession,
+                birthday: accountBirthday,
+                banned: accountBanned,
+                level: accountLevel
+            };
+
+            $.ajax ({
+                url: "/rest/players/",
+                type: "POST",
+                data: JSON.stringify(requestBody),
+                dataType: "json",
+                contentType: "application/json; charset=utf-8",
+                success: function(){
+                    clearCreateAccountFields();
+                    loadAccounts();
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    alert("Unable to create: " + textStatus);
+                }
+            });
+        }
+    </script>
+
     <link href="/css/my.css" rel="stylesheet">
 </head>
+
 <body>
 <h1>RPG admin panel</h1>
+<h2>Accounts list:</h2>
+
+<div>
+    Count per page:
+    <select id="accountsPerPageDropdown" onchange="onChangeAccountsPerPage()">
+        <option>3</option>
+        <option>9</option>
+        <option>15</option>
+        <option>20</option>
+    </select>
+</div>
+
+<table id="tableAccounts">
+    <tr>
+        <th>#</th>
+        <th>Name</th>
+        <th>Title</th>
+        <th>Race</th>
+        <th>Profession</th>
+        <th>Level</th>
+        <th>Birthday</th>
+        <th>Banned</th>
+        <th>Edit</th>
+        <th>Delete</th>
+    </tr>
+</table>
+
+<div>
+    Pages:
+    <span id="pageButtonsContainer">
+
+    </span>
+</div>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<div id="createNewAccountContainer">
+    <h2>Create new account:</h2>
+    <div>
+        Name:
+        <input id="createAccountNameInput" type="text" minlength="1" maxlength="12">
+    </div>
+
+    <div>
+        Title:
+        <input id="createAccountTitleInput" type="text" minlength="1" maxlength="30">
+    </div>
+
+    <div>
+        Race:
+        <select id="createAccountRaceDropdown"></select>
+    </div>
+
+    <div>
+        Profession:
+        <select id="createAccountProfessionDropdown"></select>
+    </div>
+
+    <div>
+        Level:
+        <input id="createAccountLevelInput" type="number" min="0" max="100">
+    </div>
+
+    <div>
+        Birthday:
+        <input id="createAccountBirthdayInput" type="date">
+    </div>
+
+    <div>
+        Banned:
+        <select id="createAccountBannedDropdown"></select>
+    </div>
+
+    <button onclick="onSaveClick()">Save</button>
+</div>
 
 </body>
 </html>
